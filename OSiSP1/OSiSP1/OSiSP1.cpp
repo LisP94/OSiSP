@@ -5,23 +5,28 @@
 #include "OSiSP1.h"
 #include <commdlg.h>
 #include <stdlib.h>
-#define PENCIL 1
-#define LINE 2
-#define POLYLINE 8
-#define POLYGON 9
-#define WIDTH_1 10
-#define WIDTH_2 11
-#define WIDTH_3 12
-#define WIDTH_4 13
-#define WIDTH_5 14
-#define WIDTH_6 15
-#define WIDTH_7 16
-#define WIDTH_8 17
-#define WIDTH_9 18
-#define WIDTH_10 19
-#define SAVE 21
-#define OPEN 22
-#define PRINT 23
+#define IM_ABOUT 0
+#define IM_PENCIL 1
+#define IM_LINE 2
+#define IM_RECTANGLE 3
+#define IM_EXIT 4
+#define IM_COLOR 5
+#define IM_ELLIPSE 7
+#define IM_POLYLINE 8
+#define IM_POLYGON 9
+#define IM_WIDTH_1 10
+#define IM_WIDTH_2 11
+#define IM_WIDTH_3 12
+#define IM_WIDTH_4 13
+#define IM_WIDTH_5 14
+#define IM_WIDTH_6 15
+#define IM_WIDTH_7 16
+#define IM_WIDTH_8 17
+#define IM_WIDTH_9 18
+#define IM_WIDTH_10 19
+#define IM_SAVE 21
+#define IM_OPEN 22
+#define IM_PRINT 23
 
 #define MAX_LOADSTRING 100
 
@@ -120,7 +125,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 //
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-   HWND hWnd;
+   HWND hWnd,hWnd1;
 
    hInst = hInstance; // Store instance handle in our global variable
    hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_SYSMENU | WS_VISIBLE | WS_MINIMIZEBOX,
@@ -132,32 +137,32 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    hSubMenuFile = CreatePopupMenu();
 
    AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenuFile, L"File");
-   AppendMenu(hSubMenuFile, MF_STRING, OPEN, L"Open             Shift+O");
-   AppendMenu(hSubMenuFile, MF_STRING, SAVE, L"Save               Shift+S");
-   AppendMenu(hSubMenuFile, MF_STRING, PRINT, L"Print               Shift+P");
-   AppendMenu(hSubMenuFile, MF_STRING, 0, L"About");
-   AppendMenu(hSubMenuFile, MF_STRING, 4, L"Exit                 Shift+E");
+   AppendMenu(hSubMenuFile, MF_STRING, IM_OPEN, L"Open             Shift+O");
+   AppendMenu(hSubMenuFile, MF_STRING, IM_SAVE, L"Save               Shift+S");
+   AppendMenu(hSubMenuFile, MF_STRING, IM_PRINT, L"Print               Shift+P");
+   AppendMenu(hSubMenuFile, MF_STRING, IM_ABOUT, L"About");
+   AppendMenu(hSubMenuFile, MF_STRING, IM_EXIT, L"Exit                 Shift+E");
    AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenuTools, L"Tools");
-   AppendMenu(hSubMenuTools, MF_STRING, PENCIL, L"Pencil");
-   AppendMenu(hSubMenuTools, MF_STRING, LINE, L"Line");
-   AppendMenu(hSubMenuTools, MF_STRING, 3, L"Rectangle");
-   AppendMenu(hSubMenuTools, MF_STRING, 7, L"Ellipse");
-   AppendMenu(hSubMenuTools, MF_STRING, POLYLINE, L"Polyline");
-   AppendMenu(hSubMenuTools, MF_STRING, POLYGON, L"Polygon");
+   AppendMenu(hSubMenuTools, MF_STRING, IM_PENCIL, L"Pencil");
+   AppendMenu(hSubMenuTools, MF_STRING, IM_LINE, L"Line");
+   AppendMenu(hSubMenuTools, MF_STRING, IM_RECTANGLE, L"Rectangle");
+   AppendMenu(hSubMenuTools, MF_STRING, IM_ELLIPSE, L"Ellipse");
+   AppendMenu(hSubMenuTools, MF_STRING, IM_POLYLINE, L"Polyline");
+   AppendMenu(hSubMenuTools, MF_STRING, IM_POLYGON, L"Polygon");
    AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenuWidth, L"Width");
-   AppendMenu(hSubMenuWidth, MF_STRING, WIDTH_1, L"1");
-   AppendMenu(hSubMenuWidth, MF_STRING, WIDTH_2, L"2");
-   AppendMenu(hSubMenuWidth, MF_STRING, WIDTH_3, L"3");
-   AppendMenu(hSubMenuWidth, MF_STRING, WIDTH_4, L"4");
-   AppendMenu(hSubMenuWidth, MF_STRING, WIDTH_5, L"5");
-   AppendMenu(hSubMenuWidth, MF_STRING, WIDTH_6, L"6");
-   AppendMenu(hSubMenuWidth, MF_STRING, WIDTH_7, L"7");
-   AppendMenu(hSubMenuWidth, MF_STRING, WIDTH_8, L"8");
-   AppendMenu(hSubMenuWidth, MF_STRING, WIDTH_9, L"9");
-   AppendMenu(hSubMenuWidth, MF_STRING, WIDTH_10, L"10");
+   AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_1, L"1");
+   AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_2, L"2");
+   AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_3, L"3");
+   AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_4, L"4");
+   AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_5, L"5");
+   AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_6, L"6");
+   AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_7, L"7");
+   AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_8, L"8");
+   AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_9, L"9");
+   AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_10, L"10");
    AppendMenu(hMenu, MF_STRING, 6, L"Zoom");
    AppendMenu(hMenu, MF_STRING, 20, L"Zoom-");
-   AppendMenu(hMenu, MF_STRING, 5, L"Color");
+   AppendMenu(hMenu, MF_STRING, IM_COLOR, L"Color");
    SetMenu(hWnd, hMenu);
    SetMenu(hWnd, hSubMenuTools);
    SetMenu(hWnd, hSubMenuFile);
@@ -186,12 +191,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
 	static int mouseX,mouseY,menu,i=0,width,polX,polY;
-	static bool polFl = true,fl=false;
+	static bool polFl = true, fl = false, sht = false, pan = false;
 	static float k=1;
 	PAINTSTRUCT ps;
 	static HDC hdc;
 	HBITMAP hbmp1,hbmp2;
 	HGDIOBJ hobj;
+	HFONT hFont;
 	static RECT r;
 	static COLORREF clr;
 	static HPEN hpen;
@@ -226,16 +232,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case 4:
 			DestroyWindow(hWnd);
 			break;
-		case PENCIL:
-			menu = 1;
+		case IM_PENCIL:
+			menu = IM_PENCIL;
 			break;
-		case LINE:
-			menu = 2;
+		case IM_LINE:
+			menu = IM_LINE;
 			break;
-		case 3:
-			menu = 3;
+		case IM_RECTANGLE:
+			menu = IM_RECTANGLE;
 			break;
-		case 5:
+		case IM_COLOR:
 			GetPenColor(hWnd, &clr);
 			hpen = CreatePen(PS_SOLID, 1, clr);
 			SelectObject(hdc, hpen);
@@ -248,58 +254,55 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
 			k=k+0.01;
 			break;
-		case POLYLINE:
+		case IM_POLYLINE:
 			menu = 8;
 			break;
-		case POLYGON:
+		case IM_POLYGON:
 			menu = 9;
 			break;
 		case 20:
-			StretchBlt(hdc2, 0, 0, 1366*k, 768*k, hdc1, 0, 0, 1366, 768, SRCCOPY);
-			BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
-			BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY); 
-			k=k-0.01;
+			
 			break;
-		case SAVE:
+		case IM_SAVE:
 			SaveEnhMetaFile(hWnd);
 			break;
-		case OPEN:
+		case IM_OPEN:
 			OpenEnhMetaFile(hWnd);
 			break;
-		case PRINT:
+		case IM_PRINT:
 			Print(hWnd);
 			break;
-		case 7:
-			menu = 7;
+		case IM_ELLIPSE:
+			menu = IM_ELLIPSE;
 			break;
-		case WIDTH_1:
+		case IM_WIDTH_1:
 			width = 1;
 			break;
-		case WIDTH_2:
+		case IM_WIDTH_2:
 			width = 2;
 			break;
-		case WIDTH_3:
+		case IM_WIDTH_3:
 			width = 3;
 			break;
-		case WIDTH_4:
+		case IM_WIDTH_4:
 			width = 4;
 			break;
-		case WIDTH_5:
+		case IM_WIDTH_5:
 			width = 5;
 			break;
-		case WIDTH_6:
+		case IM_WIDTH_6:
 			width = 6;
 			break;
-		case WIDTH_7:
+		case IM_WIDTH_7:
 			width = 7;
 			break;
-		case WIDTH_8:
+		case IM_WIDTH_8:
 			width = 8;
 			break;
-		case WIDTH_9:
+		case IM_WIDTH_9:
 			width = 9;
 			break;
-		case WIDTH_10:
+		case IM_WIDTH_10:
 			width = 10;
 			break;
 		default:
@@ -323,19 +326,69 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_KEYDOWN:
 		if (wParam == VK_SHIFT)
 		{
-			
+			sht = true;
+		}
+		if (wParam == VK_CONTROL)
+		{
+			pan = true;
 		}
 		break; 
+	case WM_KEYUP:
+		if (wParam == VK_SHIFT)
+		{
+			sht = false;
+		}
+		if (wParam == VK_CONTROL)
+		{
+			pan = false;
+		}
+		break;
 	case WM_MOUSEWHEEL:
 		if (HIWORD(wParam) > WHEEL_DELTA)
 		{
-			ScrollDC(hdc1, 0, 10, &r, NULL, NULL, NULL);
-			BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+			if (sht)
+			{
+				StretchBlt(hdc2, 0, 0, 1366 * k, 768 * k, hdc1, 0, 0, 1366, 768, SRCCOPY);
+				BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+				BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+				k = k - 0.01;
+			}
+			else
+			{
+				if (pan)
+				{
+					ScrollDC(hdc1, 10, 0, &r, NULL, NULL, NULL);
+					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+				}
+				else
+				{
+					ScrollDC(hdc1, 0, 10, &r, NULL, NULL, NULL);
+					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+				}
+			}
 		}
 		else
 		{
-			ScrollDC(hdc1, 0, -10, &r, NULL, NULL, NULL);
-			BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+			if (sht)
+			{
+				StretchBlt(hdc2, 0, 0, 1366 * k, 768 * k, hdc1, 0, 0, 1366, 768, SRCCOPY);
+				BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+				BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+				k = k + 0.01;
+			}
+			else
+			{
+				if (pan)
+				{
+					ScrollDC(hdc1, -10, 0, &r, NULL, NULL, NULL);
+					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+				}
+				else
+				{
+					ScrollDC(hdc1, 0, -10, &r, NULL, NULL, NULL);
+					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+				}
+			}
 		}
 		break;
 	case WM_LBUTTONDOWN:
@@ -352,7 +405,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			MoveToEx(hdc1, mouseX, mouseY, NULL); 
 			MoveToEx(hdc2, mouseX, mouseY, NULL);
 			fl = !fl;
-			if (menu == 8 || menu==9)
+			if (menu == IM_POLYLINE || menu==IM_POLYGON)
 			{
 				fl = false;
 				BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
@@ -365,7 +418,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			 {
 				 hdc = GetDC(hWnd);
 				 SelectObject(hdc1, hpen);
-				 if (menu == 1)
+				 if (menu == IM_PENCIL)
 				 {
 					 MoveToEx(hdc1, mouseX, mouseY, NULL);
 					 mouseX = LOWORD(lParam);
@@ -373,14 +426,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					 LineTo(hdc1, mouseX, mouseY);
 					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
 				 }
-				 if (menu == 2)
+				 if (menu == IM_LINE)
 				 {
 					 BitBlt(hdc2, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
 					 MoveToEx(hdc2, mouseX, mouseY, NULL);
 					 LineTo(hdc2, LOWORD(lParam),HIWORD(lParam));
 					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
 				 }
-				 if (menu == 3)
+				 if (menu == IM_RECTANGLE)
 				 {
 					 BitBlt(hdc2, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
 					 MoveToEx(hdc2, mouseX, mouseY, NULL);
@@ -389,7 +442,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					 SelectObject(hdc2, hobj);
 					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
 				 }
-				 if (menu == 7)
+				 if (menu == IM_ELLIPSE)
 				 {
 					 BitBlt(hdc2, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
 					 MoveToEx(hdc2, mouseX, mouseY, NULL); 
@@ -398,7 +451,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					 SelectObject(hdc2, hobj);
 					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
 				 }
-				 if (menu == 8 || menu ==9)
+				 if (menu == IM_POLYLINE || menu ==IM_POLYGON)
 				 {
 					 BitBlt(hdc2, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
 					 MoveToEx(hdc2, mouseX, mouseY, NULL);
@@ -408,12 +461,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			 }
 		break;
 	 case WM_LBUTTONUP:
-		 if (menu == 2 || menu == 3 || menu == 7)
+		 if (menu == IM_LINE || menu == IM_RECTANGLE || menu == IM_ELLIPSE)
 		 {
 			 BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
 			 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
 		 }
-		 if (menu == 8 || menu ==9)
+		 if (menu == IM_POLYLINE || menu ==IM_POLYGON)
 		 {
 			 fl = false;
 			 
@@ -421,13 +474,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		 fl = !fl;
 		 break;
 	 case WM_RBUTTONDOWN:
-		 if (menu == 8 || menu==9)
+		 if (menu == IM_POLYLINE || menu==IM_POLYGON)
 		 {
 			 fl = false;
 			 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
 			 BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY); 
 		 }
-		 if (menu == 9)
+		 if (menu == IM_POLYGON)
 		 {
 			 LineTo(hdc2, polX, polY);
 			 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
@@ -597,12 +650,12 @@ LPACCEL TableAccel()
 		table[i].fVirt = FSHIFT;
 	}
 	table[0].key = 0x53;
-	table[0].cmd = SAVE;
+	table[0].cmd = IM_SAVE;
 	table[1].key = 0x4f;
-	table[1].cmd = OPEN;
+	table[1].cmd = IM_OPEN;
 	table[2].key = 0x50;
-	table[2].cmd = PRINT;
+	table[2].cmd = IM_PRINT;
 	table[3].key = 0x45;
-	table[3].cmd = 4;
+	table[3].cmd = IM_EXIT;
 	return table;
 }

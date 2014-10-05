@@ -5,12 +5,14 @@
 #include "OSiSP1.h"
 #include <commdlg.h>
 #include <stdlib.h>
+#include <string.h>
 #define IM_ABOUT 0
 #define IM_PENCIL 1
 #define IM_LINE 2
 #define IM_RECTANGLE 3
 #define IM_EXIT 4
 #define IM_COLOR 5
+#define IM_TEXT 6
 #define IM_ELLIPSE 7
 #define IM_POLYLINE 8
 #define IM_POLYGON 9
@@ -149,6 +151,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    AppendMenu(hSubMenuTools, MF_STRING, IM_ELLIPSE, L"Ellipse");
    AppendMenu(hSubMenuTools, MF_STRING, IM_POLYLINE, L"Polyline");
    AppendMenu(hSubMenuTools, MF_STRING, IM_POLYGON, L"Polygon");
+   AppendMenu(hSubMenuTools, MF_STRING, IM_TEXT, L"Text");
    AppendMenu(hMenu, MF_STRING | MF_POPUP, (UINT)hSubMenuWidth, L"Width");
    AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_1, L"1");
    AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_2, L"2");
@@ -160,8 +163,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_8, L"8");
    AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_9, L"9");
    AppendMenu(hSubMenuWidth, MF_STRING, IM_WIDTH_10, L"10");
-   AppendMenu(hMenu, MF_STRING, 6, L"Zoom");
-   AppendMenu(hMenu, MF_STRING, 20, L"Zoom-");
    AppendMenu(hMenu, MF_STRING, IM_COLOR, L"Color");
    SetMenu(hWnd, hMenu);
    SetMenu(hWnd, hSubMenuTools);
@@ -189,9 +190,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 //
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	int wmId, wmEvent;
-	static int mouseX,mouseY,menu,i=0,width,polX,polY;
-	static bool polFl = true, fl = false, sht = false, pan = false;
+	int wmId, wmEvent,length;
+	static char *str;
+	static int mouseX,mouseY,menu,width,polX,polY;
+	static bool polFl = true, fl = false, text=false,zoom=false;
 	static float k=1;
 	PAINTSTRUCT ps;
 	static HDC hdc;
@@ -205,12 +207,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 	case WM_CREATE:
 		hdc = GetDC(hWnd);
-		scrhor = GetDeviceCaps(hdc, HORZRES);
-		scrvert = GetDeviceCaps(hdc, VERTRES);
+		scrhor =3* GetDeviceCaps(hdc, HORZRES);
+		scrvert =3* GetDeviceCaps(hdc, VERTRES);
 		hdc1 = CreateCompatibleDC(hdc);
 		hdc2 = CreateCompatibleDC(hdc);
-		hbmp1 = CreateCompatibleBitmap(hdc, scrhor+1,scrvert+1);
-		hbmp2 = CreateCompatibleBitmap(hdc, scrhor+1, scrvert+1);
+		hbmp1 = CreateCompatibleBitmap(hdc, scrhor, scrvert);
+		hbmp2 = CreateCompatibleBitmap(hdc, scrhor, scrvert);
 		SelectObject(hdc1, hbmp1);
 		SelectObject(hdc2, hbmp2);
 		r.left = 0;
@@ -226,10 +228,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// Parse the menu selections:
 		switch (wmId)
 		{
-		case 0:
+		case IM_ABOUT:
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
 			break;
-		case 4:
+		case IM_EXIT:
 			DestroyWindow(hWnd);
 			break;
 		case IM_PENCIL:
@@ -237,6 +239,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		case IM_LINE:
 			menu = IM_LINE;
+			break;
+		case IM_TEXT:
+			menu = IM_TEXT;
 			break;
 		case IM_RECTANGLE:
 			menu = IM_RECTANGLE;
@@ -248,20 +253,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			SelectObject(hdc1, hpen);
 			SelectObject(hdc2, hpen);
 			break;
-		case 6:
-			StretchBlt(hdc2, 0, 0, 1366*k, 768*k, hdc1, 0, 0, 1366, 768, SRCCOPY);
-			BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
-			BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
-			k=k+0.01;
-			break;
 		case IM_POLYLINE:
 			menu = 8;
 			break;
 		case IM_POLYGON:
 			menu = 9;
-			break;
-		case 20:
-			
 			break;
 		case IM_SAVE:
 			SaveEnhMetaFile(hWnd);
@@ -318,98 +314,130 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_PAINT:
 		hdc = BeginPaint(hWnd, &ps);
-		BitBlt(hdc, 0, 0, scrvert, scrhor, hdc1, 0, 0, SRCCOPY);  
-		//InvalidateRect(hWnd, &r, false);
+		if (zoom)
+		{
+			StretchBlt(hdc2, scrhor/3, scrvert/3, scrhor, scrvert, hdc1, scrhor/3, scrvert/3, scrhor*k, scrvert*k, SRCCOPY);
+			StretchBlt(hdc, 0, 0, scrhor, scrvert, hdc1, scrhor/3,scrvert/3, scrhor*k, scrvert*k, SRCCOPY);
+		}
+		else
+		{
+			BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, scrhor/3, scrvert/3, SRCCOPY);
+		}
 		// TODO: Add any drawing code here...
 		EndPaint(hWnd, &ps);
 		break;
-	case WM_KEYDOWN:
-		if (wParam == VK_SHIFT)
+	case WM_SETCURSOR:
+		SetCursor(LoadCursorFromFile(L"d:\\Cursor.png"));
+		break;
+	case WM_CHAR:
+		if (menu == IM_TEXT && text)
 		{
-			sht = true;
+			length = strlen(str);
+			if (wParam == 8)
+			{
+				str[length - 1] = '\0';
+				BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+				TextOutA(hdc1, mouseX+scrhor/3, mouseY+scrvert/3, str, strlen(str));
+				BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, scrhor/3, scrvert/3, SRCCOPY);
+				InvalidateRect(hWnd, NULL, false);
+			}
+			else
+			{
+				if (wParam == 13)
+				{
+					text = false;
+				}
+				else
+				{
+					str = (char*)realloc(str, length + 2);
+					length = length + 2;
+					str[length - 2] = wParam;
+					str[length - 1] = '\0';
+					TextOutA(hdc1, mouseX+scrhor/3, mouseY+scrvert/3, str, strlen(str));
+					InvalidateRect(hWnd, NULL, false);
+				}
+			}
 		}
-		if (wParam == VK_CONTROL)
-		{
-			pan = true;
-		}
-		break; 
+		break;
 	case WM_KEYUP:
 		if (wParam == VK_SHIFT)
 		{
-			sht = false;
-		}
-		if (wParam == VK_CONTROL)
-		{
-			pan = false;
+			zoom = false;
+			k = 1;
+			BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
 		}
 		break;
 	case WM_MOUSEWHEEL:
 		if (HIWORD(wParam) > WHEEL_DELTA)
 		{
-			if (sht)
+			if (LOWORD(wParam)==MK_SHIFT)
 			{
-				StretchBlt(hdc2, 0, 0, 1366 * k, 768 * k, hdc1, 0, 0, 1366, 768, SRCCOPY);
-				BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
-				BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
-				k = k - 0.01;
+				k = k/1.1;
+				zoom = true; 
 			}
 			else
 			{
-				if (pan)
+				if (LOWORD(wParam)==MK_CONTROL)
 				{
-					ScrollDC(hdc1, 10, 0, &r, NULL, NULL, NULL);
-					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+					ScrollDC(hdc1, 5, 0, &r, NULL, NULL, NULL);
+					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, scrhor/3, scrvert/3, SRCCOPY);
 				}
 				else
 				{
-					ScrollDC(hdc1, 0, 10, &r, NULL, NULL, NULL);
-					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+					ScrollDC(hdc1, 0, 5, &r, NULL, NULL, NULL);
+					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, scrhor/3, scrvert/3, SRCCOPY);
 				}
 			}
 		}
 		else
 		{
-			if (sht)
+			if (LOWORD(wParam)==MK_SHIFT)
 			{
-				StretchBlt(hdc2, 0, 0, 1366 * k, 768 * k, hdc1, 0, 0, 1366, 768, SRCCOPY);
-				BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
-				BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
-				k = k + 0.01;
+				k = k*1.1;
+				zoom = true;
 			}
 			else
 			{
-				if (pan)
+				if (LOWORD(wParam)==MK_CONTROL)
 				{
-					ScrollDC(hdc1, -10, 0, &r, NULL, NULL, NULL);
-					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+					ScrollDC(hdc1, -5, 0, &r, NULL, NULL, NULL);
+					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, scrhor/3, scrvert/3, SRCCOPY);
 				}
 				else
 				{
-					ScrollDC(hdc1, 0, -10, &r, NULL, NULL, NULL);
-					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+					ScrollDC(hdc1, 0, -5, &r, NULL, NULL, NULL);
+					BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, scrhor/3, scrvert/3, SRCCOPY);
 				}
 			}
 		}
+		InvalidateRect(hWnd, NULL, false);
 		break;
 	case WM_LBUTTONDOWN:
 		if (menu)
 		{
 			mouseX = LOWORD(lParam);
 			mouseY = HIWORD(lParam);
-			if (menu == 9 && polFl)
+			if (menu == IM_POLYGON && polFl)
 			{
 				polX = mouseX;
 				polY = mouseY;
 				polFl = false;
 			}
-			MoveToEx(hdc1, mouseX, mouseY, NULL); 
-			MoveToEx(hdc2, mouseX, mouseY, NULL);
+			MoveToEx(hdc1, mouseX+scrhor/3, mouseY+scrvert/3, NULL); 
+			MoveToEx(hdc2, mouseX+scrhor/3, mouseY+scrvert/3, NULL);
 			fl = !fl;
 			if (menu == IM_POLYLINE || menu==IM_POLYGON)
 			{
 				fl = false;
-				BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+				BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, scrhor/3, scrvert/3, SRCCOPY);
 				BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+			}
+			if (menu == IM_TEXT)
+			{
+				BitBlt(hdc2, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+				text = true;
+				str = (char*)malloc(1);
+				str[0] = '\0';
 			}
 		}
 		break;
@@ -420,43 +448,42 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				 SelectObject(hdc1, hpen);
 				 if (menu == IM_PENCIL)
 				 {
-					 MoveToEx(hdc1, mouseX, mouseY, NULL);
 					 mouseX = LOWORD(lParam);
 					 mouseY = HIWORD(lParam);
-					 LineTo(hdc1, mouseX, mouseY);
-					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+					 LineTo(hdc1, mouseX+scrhor/3, mouseY+scrvert/3);
+					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc1, scrhor/3, scrvert/3, SRCCOPY);
 				 }
 				 if (menu == IM_LINE)
 				 {
 					 BitBlt(hdc2, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
-					 MoveToEx(hdc2, mouseX, mouseY, NULL);
-					 LineTo(hdc2, LOWORD(lParam),HIWORD(lParam));
-					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+					 MoveToEx(hdc2, mouseX+scrhor/3, mouseY+scrvert/3, NULL);
+					 LineTo(hdc2, LOWORD(lParam)+scrhor/3,HIWORD(lParam)+scrvert/3);
+					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, scrhor/3, scrvert/3, SRCCOPY);
 				 }
 				 if (menu == IM_RECTANGLE)
 				 {
 					 BitBlt(hdc2, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
-					 MoveToEx(hdc2, mouseX, mouseY, NULL);
+					 MoveToEx(hdc2, mouseX+scrhor/3, mouseY+scrhor/3, NULL);
 					 hobj=SelectObject(hdc2, GetStockObject(NULL_BRUSH));
-					 Rectangle(hdc2, mouseX, mouseY, LOWORD(lParam), HIWORD(lParam));
+					 Rectangle(hdc2, mouseX+scrhor/3, mouseY+scrvert/3, LOWORD(lParam)+scrhor/3, HIWORD(lParam)+scrvert/3);
 					 SelectObject(hdc2, hobj);
-					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, scrhor/3, scrvert/3, SRCCOPY);
 				 }
 				 if (menu == IM_ELLIPSE)
 				 {
 					 BitBlt(hdc2, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
 					 MoveToEx(hdc2, mouseX, mouseY, NULL); 
 					 hobj=SelectObject(hdc2, GetStockObject(NULL_BRUSH));
-					 Ellipse(hdc2, mouseX, mouseY, LOWORD(lParam), HIWORD(lParam));
+					 Ellipse(hdc2, mouseX+scrhor/3, mouseY+scrvert/3, LOWORD(lParam)+scrhor/3, HIWORD(lParam)+scrvert/3);
 					 SelectObject(hdc2, hobj);
-					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, scrhor/3, scrvert/3, SRCCOPY);
 				 }
 				 if (menu == IM_POLYLINE || menu ==IM_POLYGON)
 				 {
 					 BitBlt(hdc2, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
-					 MoveToEx(hdc2, mouseX, mouseY, NULL);
-					 LineTo(hdc2, LOWORD(lParam), HIWORD(lParam));
-					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+					 MoveToEx(hdc2, mouseX+scrhor/3, mouseY+scrvert/3, NULL);
+					 LineTo(hdc2, LOWORD(lParam)+scrhor/3, HIWORD(lParam)+scrvert/3);
+					 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, scrhor/3, scrvert/3, SRCCOPY);
 				 }
 			 }
 		break;
@@ -464,7 +491,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		 if (menu == IM_LINE || menu == IM_RECTANGLE || menu == IM_ELLIPSE)
 		 {
 			 BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
-			 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+			 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, scrhor/3, scrvert/3, SRCCOPY);
 		 }
 		 if (menu == IM_POLYLINE || menu ==IM_POLYGON)
 		 {
@@ -477,18 +504,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		 if (menu == IM_POLYLINE || menu==IM_POLYGON)
 		 {
 			 fl = false;
-			 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+			 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, scrhor/3, scrvert/3, SRCCOPY);
 			 BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY); 
 		 }
 		 if (menu == IM_POLYGON)
 		 {
-			 LineTo(hdc2, polX, polY);
-			 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
+			 LineTo(hdc2, polX+scrhor/3, polY+scrvert/3);
+			 BitBlt(hdc, 0, 0, scrhor, scrvert, hdc2, scrhor/3, scrvert/3, SRCCOPY);
 			 BitBlt(hdc1, 0, 0, scrhor, scrvert, hdc2, 0, 0, SRCCOPY);
 			 polFl = true;
 		 }
 		 break;
 	case WM_DESTROY:
+		ReleaseDC(hWnd, hdc);
+		ReleaseDC(hWnd, hdc1);
+		ReleaseDC(hWnd, hdc2);
 		PostQuitMessage(0); 
 		break;
 	default:
@@ -522,24 +552,14 @@ BOOL GetPenColor(HWND hwnd, COLORREF *clrref)
 	CHOOSECOLOR cc;
 	COLORREF aclrCust[16];
 	int i;
-
-	// Подготавливаем массив цветов
-	// "Custom Colors"
 	for (i = 0; i < 16; i++)
 		aclrCust[i] = RGB(255, 255, 255);
-
-	// Записываем нулевые значения во все
-	// неиспользуемые поля структуры CHOOSECOLOR
 	memset(&cc, 0, sizeof(CHOOSECOLOR));
-
-	// Заполняем необходимые поля
 	cc.lStructSize = sizeof(CHOOSECOLOR);
 	cc.hwndOwner = hwnd;
 	cc.rgbResult = RGB(0, 0, 0);
 	cc.lpCustColors = aclrCust;
 	cc.Flags = 0;
-
-	// Выбираем цвет и возвращаем результат
 	if (ChooseColor(&cc))
 	{
 		*clrref = cc.rgbResult;
@@ -568,7 +588,6 @@ void SaveEnhMetaFile(HWND hWnd)
 	SFile.lpstrTitle = L"Save file as:";
 	SFile.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
 	GetSaveFileName(&SFile);
-	//Creating an Enhanced Metafile
 	HDC hdcRef = GetDC(hWnd);
 	int iWidthMM, iHeightMM, iWidthPels, iHeightPels;
 	RECT EnhClient;
@@ -582,7 +601,7 @@ void SaveEnhMetaFile(HWND hWnd)
 	EnhClient.right = (EnhClient.right * iWidthMM * 100) / iWidthPels;
 	EnhClient.bottom = (EnhClient.bottom * iHeightMM * 100) / iHeightPels;
 	HDC hdcEmf = CreateEnhMetaFile(hdcRef, SFile.lpstrFile, &EnhClient, 0);
-	BitBlt(hdcEmf, 0, 0, scrhor, scrvert, hdc1, 0, 0, SRCCOPY);
+	BitBlt(hdcEmf, 0, 0, scrhor/3, scrvert/3, hdc1, scrhor/3, scrvert/3, SRCCOPY);
 	CloseEnhMetaFile(hdcEmf);
 	ReleaseDC(hWnd, hdcRef);
 }
@@ -603,12 +622,16 @@ void OpenEnhMetaFile(HWND hWnd)
 	LFile.nMaxFileTitle = MAX_PATH * sizeof(WCHAR);
 	LFile.lpstrInitialDir = 0;
 	LFile.lpstrDefExt = L"emf\0";
-	LFile.lpstrTitle = L"Load file from:";
+	LFile.lpstrTitle = L"Open file from:";
 	LFile.Flags = OFN_PATHMUSTEXIST;
 	GetOpenFileName(&LFile);
 	HENHMETAFILE enhFile = GetEnhMetaFile(LFile.lpstrFile);
 	RECT client;
 	GetClientRect(hWnd, &client);
+	client.left += scrhor / 3;
+	client.top += scrvert / 3;
+	client.right += scrhor / 3;
+	client.bottom += scrvert / 3;
 	PlayEnhMetaFile(hdc1, enhFile, &client);
 	PlayEnhMetaFile(hdc2, enhFile, &client);
 	DeleteEnhMetaFile(enhFile);
@@ -634,10 +657,10 @@ void Print(HWND hWnd)
 	docInfo.lpszOutput = 0;
 	docInfo.lpszDatatype = 0;
 	docInfo.fwType = 0;
-	StartDoc(PrintDialog.hDC, &docInfo); //start print job
+	StartDoc(PrintDialog.hDC, &docInfo); 
 	RECT printRect;
 	GetClientRect(hWnd, &printRect);
-	StretchBlt(PrintDialog.hDC, 0, 0, scrhor, scrvert, hdc1, 0, 0, scrhor,scrvert, SRCCOPY);
+	StretchBlt(PrintDialog.hDC, 0, 0, scrhor*4, scrvert*4, hdc1, scrhor/3, scrvert/3, scrhor/3*2,scrvert/3*2, SRCCOPY);
 	EndDoc(PrintDialog.hDC);
 }
 

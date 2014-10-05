@@ -6,6 +6,8 @@
 #include <commdlg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+#define pi 3.141592654
 #define IM_ABOUT 0
 #define IM_PENCIL 1
 #define IM_LINE 2
@@ -36,17 +38,28 @@
 HINSTANCE hInst;								// current instance
 TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
+TCHAR szChildTitle[] = L"Clock";
+TCHAR szChildClass[] = L"ClockClass";
 HDC hdc1, hdc2;
+HWND  GlWnd;
 int scrvert, scrhor;
+struct TIME
+{
+	int xs, ys, xm, ym, xh, yh, min, hour;
+};
 // Forward declarations of functions included in this code module:
 ATOM				MyRegisterClass(HINSTANCE hInstance);
+ATOM				MyChildRegisterClass(HINSTANCE hInstance);
 BOOL				InitInstance(HINSTANCE, int);
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK	WndclProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 BOOL GetPenColor(HWND hwnd, COLORREF *clrref);
 void SaveEnhMetaFile(HWND hWnd);
 void OpenEnhMetaFile(HWND hWnd);
 void Print(HWND hWnd);
+void NewHand(int &x, int &y);
+void SetTime(TIME &t);
 LPACCEL TableAccel();
 
 int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
@@ -65,6 +78,7 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	LoadString(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	LoadString(hInstance, IDC_OSISP1, szWindowClass, MAX_LOADSTRING);
 	MyRegisterClass(hInstance);
+	MyChildRegisterClass(hInstance);
 
 	// Perform application initialization:
 	if (!InitInstance (hInstance, nCmdShow))
@@ -106,7 +120,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	wcex.cbWndExtra		= 0;
 	wcex.hInstance		= hInstance;
 	wcex.hIcon			= LoadIcon(hInstance, MAKEINTRESOURCE(IDI_OSISP1));
-	wcex.hCursor		= LoadCursor(NULL, IDC_ARROW);
+	wcex.hCursor		= LoadCursor(NULL, IDC_CROSS);
 	wcex.hbrBackground	= (HBRUSH)(COLOR_WINDOW+1);
 	wcex.lpszMenuName	= MAKEINTRESOURCE(IDC_OSISP1);
 	wcex.lpszClassName	= szWindowClass;
@@ -115,6 +129,26 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	return RegisterClassEx(&wcex);
 }
 
+ATOM MyChildRegisterClass(HINSTANCE hInstance)
+{
+	WNDCLASSEX  wclcex;
+
+	wclcex.cbSize = sizeof(WNDCLASSEX);
+
+	wclcex.style = CS_HREDRAW | CS_VREDRAW;
+	wclcex.lpfnWndProc = WndclProc;
+	wclcex.cbClsExtra = 0;
+	wclcex.cbWndExtra = 0;
+	wclcex.hInstance = hInstance;
+	wclcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_OSISP1));
+	wclcex.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wclcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+	wclcex.lpszMenuName = NULL;
+	wclcex.lpszClassName = szChildClass;
+	wclcex.hIconSm = LoadIcon(wclcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+
+	return RegisterClassEx(&wclcex);
+}
 //
 //   FUNCTION: InitInstance(HINSTANCE, int)
 //
@@ -127,11 +161,12 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 //
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-   HWND hWnd,hWnd1;
+   HWND hWnd,hWndclock;
 
    hInst = hInstance; // Store instance handle in our global variable
-   hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_SYSMENU | WS_VISIBLE | WS_MINIMIZEBOX,
+   hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_SYSMENU | WS_VISIBLE | WS_MINIMIZEBOX | WS_CLIPCHILDREN,
       CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, NULL, NULL, hInstance, NULL);
+   GlWnd = hWnd;
    HMENU hMenu, hSubMenuTools,hSubMenuWidth,hSubMenuFile;
    hMenu = CreateMenu();
    hSubMenuTools = CreatePopupMenu();
@@ -175,6 +210,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
 
+   hWndclock = CreateWindow(szChildClass, szChildTitle, WS_CAPTION | WS_CHILD | WS_DISABLED,
+	   100, 100, 200, 200, hWnd,NULL, hInstance, NULL); 
+   if (!hWndclock)
+   {
+	   return FALSE;
+   }
+   ShowWindow(hWndclock, SW_SHOW);
+   UpdateWindow(hWndclock);
    return TRUE;
 }
 
@@ -325,9 +368,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 		// TODO: Add any drawing code here...
 		EndPaint(hWnd, &ps);
-		break;
-	case WM_SETCURSOR:
-		SetCursor(LoadCursorFromFile(L"d:\\Cursor.png"));
 		break;
 	case WM_CHAR:
 		if (menu == IM_TEXT && text)
@@ -527,6 +567,108 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	return 0;
 }
 
+LRESULT CALLBACK WndclProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	static HDC hdcch,hdcch1;
+	int width=200, height=200;
+	static HPEN pens, penm, penh;
+	COLORREF clr;
+	PAINTSTRUCT ps;
+	TIME time;
+	LPARAM param;
+	RECT rect;
+	static int timer,min,hour,xs,ys,xm,ym,xh,yh;
+	HBITMAP hbmp;
+	switch (message)
+	{
+	case WM_CREATE:
+		hdcch = GetDC(hWnd);
+		hdcch1 = CreateCompatibleDC(hdcch);
+		hbmp = CreateCompatibleBitmap(hdcch, width, height);
+		pens = CreatePen(PS_SOLID, 1,RGB(0,0,0));
+		penm = CreatePen(PS_SOLID, 2, RGB(0, 0, 0));
+		penh = CreatePen(PS_SOLID, 3, RGB(0, 0, 0));
+		SelectObject(hdcch1, hbmp);
+		rect.left = 0;
+		rect.top = 0;
+		rect.right = width;
+		rect.bottom = height;
+		FillRect(hdcch1, &rect, (HBRUSH)CreateSolidBrush(RGB(255, 255, 255)));
+		SelectObject(hdcch1, penh);
+		Ellipse(hdcch1, 30, 20, 160, 150);
+		TextOut(hdcch1, 88, 25, L"12", 2);
+		TextOut(hdcch1, 145, 75, L"3", 1);
+		TextOut(hdcch1, 90, 130, L"6", 1);
+		TextOut(hdcch1, 35, 75, L"9", 1);
+		ReleaseDC(hWnd, hdcch);
+		timer = SetTimer(hWnd, 1, 1000, NULL);
+		time.xs = 0;
+		time.ys = -60;
+		time.xm = 0;
+		time.ym = -50;
+		time.xh = 0;
+		time.yh = -30;
+		time.min = 0;
+		time.hour = 0;
+		SetTime(time);
+		xs=time.xs;
+		ys=time.ys;
+		xm=time.xm;
+		ym=time.ym;
+		xh=time.xh;
+		yh=time.yh;
+		min=time.min;
+		hour=time.hour;
+		break;
+	case WM_TIMER:
+		hdcch = GetDC(hWnd);
+		min++;
+		if (min== 60)
+		{
+			NewHand(xm, ym);
+			min = 0;
+			xs = 0;
+			ys = -60;
+			hour++;
+		}
+		if (hour == 12)
+		{
+			NewHand(xh, yh);
+			hour = 0;
+		}
+		NewHand(xs, ys);
+		BitBlt(hdcch, 0, 0, 200, 200, hdcch1, 0, 0, SRCCOPY);
+		MoveToEx(hdcch, 95, 85, NULL);
+		SelectObject(hdcch, pens);
+		LineTo(hdcch, xs+95, ys+85);
+		MoveToEx(hdcch, 95, 85, NULL);
+		SelectObject(hdcch, penm);
+		LineTo(hdcch, xm+95, ym+85);
+		MoveToEx(hdcch, 95, 85, NULL);
+		SelectObject(hdcch, penh);
+		LineTo(hdcch, xh+95, yh+85);
+		ReleaseDC(hWnd, hdcch);
+		break;
+	case WM_PAINT:
+		hdcch = BeginPaint(hWnd, &ps);
+		BitBlt(hdcch, 0, 0, 200,200 , hdcch1, 0, 0, SRCCOPY);
+		MoveToEx(hdcch, 95, 85, NULL);
+		SelectObject(hdcch, pens);
+		LineTo(hdcch, xs+95, ys+85);
+		MoveToEx(hdcch, 95, 85, NULL);
+		SelectObject(hdcch, penm);
+		LineTo(hdcch, xm+95, ym+85);
+		MoveToEx(hdcch, 95, 85, NULL);
+		SelectObject(hdcch, penh);
+		LineTo(hdcch, xh+95, yh+85);
+		EndPaint(hWnd, &ps);
+		break;
+	default:
+		return DefWindowProc(hWnd, message, wParam, lParam);
+	}
+	return 0;
+}
+
 // Message handler for about box.
 INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -681,4 +823,47 @@ LPACCEL TableAccel()
 	table[3].key = 0x45;
 	table[3].cmd = IM_EXIT;
 	return table;
+}
+
+void NewHand(int &x, int &y)
+{
+	int temp;
+	float ftemp;
+	temp = x;
+	ftemp = (x*cos(pi / 30) - y*sin(pi / 30));
+	if (ftemp > 0)
+	{
+		x = ftemp + 0.5;
+	}
+	else
+		x = ftemp - 0.5;
+	ftemp = (temp*sin(pi / 30) + y*cos(pi / 30));
+	if (ftemp > 0)
+	{
+		y = ftemp + 0.5;
+	}
+	else
+		y = ftemp - 0.5;
+}
+
+void SetTime(TIME &t)
+{
+	SYSTEMTIME time;
+	int i,hour;
+	GetSystemTime(&time);
+	t.min = time.wSecond;
+	t.hour = time.wMinute % 12;
+	for (i = 0; i < time.wSecond; i++)
+	{
+		NewHand(t.xs, t.ys);
+	}
+	for (i = 0; i < time.wMinute; i++)
+	{
+		NewHand(t.xm, t.ym);
+	}
+	hour = (time.wHour % 12+3)%12*5+time.wMinute/12;
+	for (i = 0; i < hour; i++)
+	{
+		NewHand(t.xh, t.yh);
+	}
 }

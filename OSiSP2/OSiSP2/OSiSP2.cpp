@@ -2,12 +2,20 @@
 //
 
 #include "stdafx.h"
+#include <conio.h>
 #include <Windows.h>
+#include <queue>
+using namespace std;
 
+typedef void FunctionInThread();
+void f1();
+void f2();
+void f3();
 DWORD WINAPI ThreadProc(LPVOID lParam)
 {
 	return 0;
 }
+
 
 class ThreadPool
 {
@@ -28,6 +36,12 @@ public:
 			pool[i] = CreateThread(NULL, 0, ThreadProc, NULL, CREATE_SUSPENDED, NULL);
 		}
 	}
+
+	void AddTask(FunctionInThread* f)
+	{
+		functionQueue.push(f);
+	}
+
 	~ThreadPool()
 	{
 		for (int i = 0; i < n; i++)
@@ -40,6 +54,7 @@ public:
 private:
 	int n;
 	HANDLE * pool;
+	queue<FunctionInThread*> functionQueue;
 };
 
 int _tmain(int argc, _TCHAR* argv[])
@@ -49,7 +64,29 @@ int _tmain(int argc, _TCHAR* argv[])
 	puts("Enter number of thread");
 	scanf("%d", &n);
 	threadPool = new ThreadPool(n);
+	do
+	{
+		n = getch();
+		if (n == '1')
+			threadPool->AddTask(&f1);
+		if (n == '2')
+			threadPool->AddTask(&f2);
+		if (n == '3')
+			threadPool->AddTask(&f3);
+	} while (n != 13);
 	delete threadPool;
 	return 0;
 }
 
+void f1()
+{
+	Sleep(1000);
+}
+void f2()
+{
+	Sleep(2000);
+}
+void f3()
+{
+	Sleep(3000);
+}

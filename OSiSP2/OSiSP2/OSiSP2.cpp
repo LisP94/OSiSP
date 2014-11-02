@@ -5,7 +5,7 @@
 #include <conio.h>
 #include <Windows.h>
 #include <queue>
-
+#include <iostream>
 using namespace std;
 
 
@@ -15,18 +15,18 @@ bool f2();
 bool f3();
 bool FinFunction();
 
-
-
-HANDLE semaphore, semaphoreEmptyQueue;
 struct ThreadParam
 {
 	bool access;
+	bool remove;
 	FunctionInThread* function;
 	HANDLE semaphore;
 };
 
-
- CRITICAL_SECTION cs;
+FILE * file;
+int beginthreadcount;
+ CRITICAL_SECTION cs,csEmptyQueue,csFile;
+ CONDITION_VARIABLE cvEmptyQueue;
 
 class ThreadPool
 {
@@ -42,25 +42,30 @@ public:
 		{
 			n = count;
 		} 
+		beginthreadcount = n;
 		pool = (HANDLE*)malloc(sizeof(HANDLE)*n);
 		threadparam = (ThreadParam*)malloc(sizeof(ThreadParam)*n);
 		InitializeCriticalSection(&cs);
+		InitializeCriticalSection(&csEmptyQueue);
+		InitializeConditionVariable(&cvEmptyQueue);
+		InitializeCriticalSection(&csFile);
 		for (int i = 0; i < n; i++)
 		{
 			threadparam[i].access = true;
+			threadparam[i].remove = false;
 			threadparam[i].semaphore = CreateSemaphore(NULL, 1, 1, NULL);
-			pool[i] = CreateThread(NULL, 0, ThreadProc, &threadparam[i], CREATE_SUSPENDED, NULL);
+			pool[i] = CreateThread(NULL, 0, ThreadProc, (LPVOID)i, CREATE_SUSPENDED, NULL);
 		}
+		fprintf(file, "Created %d threads.\n",n);
+		ResumeThread(pool[0]);
 	}
 	
 	void AddTask(FunctionInThread* f)
 	{
+		EnterCriticalSection(&csEmptyQueue);
 		taskQueue.push(f);
-	}
-
-    void Start()
-	{
-		ResumeThread(pool[0]);
+		WakeConditionVariable(&cvEmptyQueue);
+		LeaveCriticalSection(&csEmptyQueue);
 	}
 
 	~ThreadPool() 
@@ -71,62 +76,127 @@ public:
 		}
 		WaitForMultipleObjects(n, pool, true, 5000);
 		free(pool);
+		for (int i = 0; i < n; i++)
+		{
+			CloseHandle(threadparam[i].semaphore);
+		}
 		free(threadparam);
 	}
 
 private:
     static DWORD WINAPI ThreadProc(LPVOID lParam)
 	{
-		bool flag = true;
-		HANDLE a;
-		ThreadParam * param = (ThreadParam*)lParam;
+		bool flag = true, stopthread=false;
+		int index = (int)lParam;
 		FunctionInThread * function;
-		while (flag)
-		{
-			if (TryEnterCriticalSection(&cs))
+			while (flag)
 			{
-				for (int i = 1; i < n; i++)
+				if (TryEnterCriticalSection(&cs))
 				{
-					WaitForSingleObject(threadparam[i].semaphore, 1);
-					ResumeThread(pool[i]);
-					a = param->semaphore;
-				}
-				while (true)
-				{
-					while (taskQueue.empty());
-					bool add;
 					for (int i = 1; i < n; i++)
 					{
-						if (threadparam[i].access)
+						WaitForSingleObject(threadparam[i].semaphore, 1);
+						ResumeThread(pool[i]);
+					}
+					int workthreadcount = n;
+					while (true)
+					{
+						EnterCriticalSection(&csEmptyQueue);
+						while (taskQueue.empty())
 						{
-							threadparam[i].function = taskQueue.front();
-							taskQueue.pop();
-							ReleaseSemaphore(threadparam[i].semaphore, 1, NULL);
-							WaitForSingleObject(threadparam[i].semaphore, 50);
-							add = false;
+							SleepConditionVariableCS(&cvEmptyQueue, &csEmptyQueue, INFINITE);
+						}
+						LeaveCriticalSection(&csEmptyQueue);
+						if (workthreadcount == 1)
+						{
 							break;
 						}
+						bool add = true;
+						function = taskQueue.front();
+						if (function == &FinFunction)
+						{
+							stopthread = true;
+						}
+						for (int i = 1; i < n; i++)
+						{
+							if (threadparam[i].access)
+							{
+								if (function == &FinFunction)
+								{
+									workthreadcount--;
+								}
+								threadparam[i].function = function;
+								taskQueue.pop();
+								EnterCriticalSection(&csFile);
+								fprintf(file,"Add new task.\n");
+								LeaveCriticalSection(&csFile);
+								ReleaseSemaphore(threadparam[i].semaphore, 1, NULL);
+								WaitForSingleObject(threadparam[i].semaphore, 50);
+								add = false;
+								break;
+							}
+						}
+						if (add && !stopthread)
+						{
+							n++;
+							workthreadcount++;
+							pool = (HANDLE*)realloc(pool, sizeof(HANDLE)*n);
+							threadparam = (ThreadParam*)realloc(threadparam, sizeof(ThreadParam)*n);
+							threadparam[n - 1].access = true;
+							threadparam[n - 1].remove = false;
+							threadparam[n - 1].semaphore = CreateSemaphore(NULL, 1, 1, NULL);
+							threadparam[n - 1].function = function;
+							taskQueue.pop();
+							pool[n - 1] = CreateThread(NULL, 0, ThreadProc, (LPVOID)(n - 1), 0, NULL);
+							EnterCriticalSection(&csFile);
+							fprintf(file, "Exceeded the maximum number of threads. Created new thread.\n");
+							LeaveCriticalSection(&csFile);
+							Sleep(500);
+							WaitForSingleObject(threadparam[n - 1].semaphore, 50);
+						}
+						if ((taskQueue.size() < (n - 3)) && !stopthread && threadparam[n-1].remove && n>beginthreadcount)
+						{
+							n--;
+							workthreadcount--;
+							threadparam[n].function = &FinFunction;
+							EnterCriticalSection(&csFile);
+							fprintf(file,"Removed one thread.\n");
+							LeaveCriticalSection(&csFile);
+							ReleaseSemaphore(threadparam[n].semaphore, 1, NULL);
+							CloseHandle(threadparam[n].semaphore);
+						}
 					}
-					if (add)
+					LeaveCriticalSection(&cs);
+					break;
+				}
+				if (WaitForSingleObject(threadparam[index].semaphore, 5000) == WAIT_TIMEOUT)
+				{
+					if (index == (n - 1))
 					{
-						//add new thread
+						threadparam[n-1].remove = true;
 					}
 				}
-				LeaveCriticalSection(&cs);
+				else
+				{
+					ReleaseSemaphore(threadparam[index].semaphore, 1, NULL);
+					threadparam[index].access = false;
+					function = threadparam[index].function;
+					flag = (*function)();
+					if (flag)
+					{
+						threadparam[index].access = true;
+					}
+				}
 			}
-   			WaitForSingleObject(param->semaphore, INFINITE);
-			ReleaseSemaphore(param->semaphore, 1, NULL);
-			param->access = false;
-			function = param->function;
-			flag = (*function)();
-			param->access = true;
-		}
+			EnterCriticalSection(&csFile);
+			fprintf(file, "Terminated one thread.\n");
+			LeaveCriticalSection(&csFile);
 		return 0;
 	}
 	static int n;
-	static HANDLE * pool;
-	static ThreadParam * threadparam;
-    static queue <FunctionInThread*> taskQueue;
+	static HANDLE *pool;
+	static ThreadParam  *threadparam;
+    static queue <FunctionInThread*> taskQueue; 
 };
 
 int ThreadPool::n;
@@ -138,14 +208,10 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	int n;
 	ThreadPool * threadPool;
+	file = fopen("LOGG.txt", "wt");
 	puts("Enter number of thread");  
 	scanf("%d", &n);
-	semaphore = CreateSemaphore(NULL, 1, 1, NULL);
-	semaphoreEmptyQueue = CreateSemaphore(NULL, 1, 1, NULL);
 	threadPool = new ThreadPool(n);
-	threadPool->Start();
-	//ThreadPool::Create(n);
-	//ThreadPool::Start();
 	do
 	{
 		n = getch();
@@ -156,32 +222,57 @@ int _tmain(int argc, _TCHAR* argv[])
 		if (n == '3')
 			threadPool->AddTask(&f3);
 	} while (n != 13);
-	delete threadPool; 
-	//ThreadPool::Destroy();
+	delete threadPool;
+	fprintf(file, "Terminated program.\n");
+	fclose(file);
 	return 0;
 }
 
 bool f1()
 {
-	//for (int i = 0; i < 100; i++);
-	Sleep(1000);
-	puts("aaa");
+	try
+	{
+		for (int i = 0; i < 10000000; i++);
+		puts("aaa");
+	}
+	catch (...)
+	{
+		EnterCriticalSection(&csFile);
+		fprintf(file,"Error of executing users function.\n");
+		LeaveCriticalSection(&csFile);
+	}
 	return true;
 }
 
 bool f2()
 {
-	//for (int i = 0; i < 1000; i++);
-	Sleep(2000);
-	puts("bbb");
+	try
+	{
+		for (int i = 0; i < 100000000; i++);
+		puts("bbb");
+	}
+	catch (...)
+	{
+		EnterCriticalSection(&csFile);
+		fprintf(file, "Error of executing users function.\n");
+		LeaveCriticalSection(&csFile);
+	}
 	return true;
 }
 
 bool f3()
 {
-	//for (int i = 0; i < 10000; i++);
-	Sleep(3000);
-	puts("ccc");
+	try
+	{
+		for (int i = 0; i < 1000000000; i++);
+		puts("ccc");
+	}
+	catch (...)
+	{
+		EnterCriticalSection(&csFile);
+		fprintf(file, "Error of executing users function.\n");
+		LeaveCriticalSection(&csFile);
+	}
 	return true;
 }
 

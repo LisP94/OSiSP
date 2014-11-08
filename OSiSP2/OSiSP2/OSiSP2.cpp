@@ -25,8 +25,8 @@ struct ThreadParam
 
 FILE * file;
 int beginthreadcount;
- CRITICAL_SECTION cs,csEmptyQueue,csFile;
- CONDITION_VARIABLE cvEmptyQueue;
+int asdf=0, qqq=0;
+ CRITICAL_SECTION cs,csFile;
 
 class ThreadPool
 {
@@ -35,8 +35,7 @@ public:
 	{
 		if (count < 1)
 		{
-			n = 5; 
-
+			n = 5;
 		}
 		else
 		{
@@ -46,26 +45,29 @@ public:
 		pool = (HANDLE*)malloc(sizeof(HANDLE)*n);
 		threadparam = (ThreadParam*)malloc(sizeof(ThreadParam)*n);
 		InitializeCriticalSection(&cs);
-		InitializeCriticalSection(&csEmptyQueue);
-		InitializeConditionVariable(&cvEmptyQueue);
 		InitializeCriticalSection(&csFile);
+		fprintf(file, "Created %d threads.\n", n);
 		for (int i = 0; i < n; i++)
 		{
 			threadparam[i].access = true;
 			threadparam[i].remove = false;
-			threadparam[i].semaphore = CreateSemaphore(NULL, 1, 1, NULL);
-			pool[i] = CreateThread(NULL, 0, ThreadProc, (LPVOID)i, CREATE_SUSPENDED, NULL);
+			threadparam[i].function = NULL;
+			threadparam[i].semaphore = CreateSemaphore(NULL, 0, 1, NULL);
+			pool[i] = CreateThread(NULL, 0, ThreadProc, (LPVOID)i, 0, NULL);
 		}
-		fprintf(file, "Created %d threads.\n",n);
-		ResumeThread(pool[0]);
 	}
 	
 	void AddTask(FunctionInThread* f)
 	{
-		EnterCriticalSection(&csEmptyQueue);
 		taskQueue.push(f);
-		WakeConditionVariable(&cvEmptyQueue);
-		LeaveCriticalSection(&csEmptyQueue);
+		for (int i = 0; i < n; i++)
+		{
+			if (threadparam[i].access)
+			{
+				ReleaseSemaphore(threadparam[i].semaphore,1,NULL);
+				break;
+			}
+		}
 	}
 
 	~ThreadPool() 
@@ -86,6 +88,7 @@ public:
 private:
     static DWORD WINAPI ThreadProc(LPVOID lParam)
 	{
+		SYSTEMTIME time;
 		bool flag = true, stopthread=false;
 		int index = (int)lParam;
 		FunctionInThread * function;
@@ -93,53 +96,31 @@ private:
 			{
 				if (TryEnterCriticalSection(&cs))
 				{
-					for (int i = 1; i < n; i++)
+					if (!taskQueue.empty())
 					{
-						WaitForSingleObject(threadparam[i].semaphore, 1);
-						ResumeThread(pool[i]);
-					}
-					int workthreadcount = n;
-					while (true)
-					{
-						EnterCriticalSection(&csEmptyQueue);
-						while (taskQueue.empty())
-						{
-							SleepConditionVariableCS(&cvEmptyQueue, &csEmptyQueue, INFINITE);
-						}
-						LeaveCriticalSection(&csEmptyQueue);
-						if (workthreadcount == 1)
-						{
-							break;
-						}
-						bool add = true;
 						function = taskQueue.front();
 						if (function == &FinFunction)
 						{
 							stopthread = true;
 						}
-						for (int i = 1; i < n; i++)
+						for (int i = 0; i < n; i++)
 						{
-							if (threadparam[i].access)
+							if (threadparam[i].access && i!=index)
 							{
-								if (function == &FinFunction)
-								{
-									workthreadcount--;
-								}
+								function = taskQueue.front();
 								threadparam[i].function = function;
 								taskQueue.pop();
 								EnterCriticalSection(&csFile);
-								fprintf(file,"Add new task.\n");
+								fprintf(file, "Add new task.\n");
 								LeaveCriticalSection(&csFile);
 								ReleaseSemaphore(threadparam[i].semaphore, 1, NULL);
-								WaitForSingleObject(threadparam[i].semaphore, 50);
-								add = false;
-								break;
+								if (taskQueue.empty())
+									break;
 							}
 						}
-						if (add && !stopthread)
+						if (!stopthread && taskQueue.size()>1)
 						{
 							n++;
-							workthreadcount++;
 							pool = (HANDLE*)realloc(pool, sizeof(HANDLE)*n);
 							threadparam = (ThreadParam*)realloc(threadparam, sizeof(ThreadParam)*n);
 							threadparam[n - 1].access = true;
@@ -148,48 +129,65 @@ private:
 							threadparam[n - 1].function = function;
 							taskQueue.pop();
 							pool[n - 1] = CreateThread(NULL, 0, ThreadProc, (LPVOID)(n - 1), 0, NULL);
+							Sleep(100);
 							EnterCriticalSection(&csFile);
 							fprintf(file, "Exceeded the maximum number of threads. Created new thread.\n");
 							LeaveCriticalSection(&csFile);
-							Sleep(500);
-							WaitForSingleObject(threadparam[n - 1].semaphore, 50);
 						}
-						if ((taskQueue.size() < (n - 3)) && !stopthread && threadparam[n-1].remove && n>beginthreadcount)
+						if ((taskQueue.size() < (n - 2)) && !stopthread && threadparam[n - 1].remove && n > beginthreadcount)
 						{
 							n--;
-							workthreadcount--;
 							threadparam[n].function = &FinFunction;
 							EnterCriticalSection(&csFile);
-							fprintf(file,"Removed one thread.\n");
+							fprintf(file, "Removed thread %d.\n",(int)pool[n]);
 							LeaveCriticalSection(&csFile);
 							ReleaseSemaphore(threadparam[n].semaphore, 1, NULL);
 							CloseHandle(threadparam[n].semaphore);
 						}
+						if (!taskQueue.empty())
+						{
+							threadparam[index].function = taskQueue.front();
+							taskQueue.pop();
+							EnterCriticalSection(&csFile);
+							fprintf(file, "Add new task.\n");
+							LeaveCriticalSection(&csFile);
+							ReleaseSemaphore(threadparam[index].semaphore, 1, NULL);
+						}
 					}
 					LeaveCriticalSection(&cs);
-					break;
 				}
-				if (WaitForSingleObject(threadparam[index].semaphore, 5000) == WAIT_TIMEOUT)
+				EnterCriticalSection(&csFile);
+				fprintf(file, "Thread %d will wait 1 minute.\n", (int)pool[index]);
+				LeaveCriticalSection(&csFile);
+				if (WaitForSingleObject(threadparam[index].semaphore, 30000) == WAIT_TIMEOUT)
 				{
-					if (index == (n - 1))
-					{
-						threadparam[n-1].remove = true;
-					}
+					threadparam[index].remove = true;
 				}
 				else
 				{
-					ReleaseSemaphore(threadparam[index].semaphore, 1, NULL);
 					threadparam[index].access = false;
 					function = threadparam[index].function;
-					flag = (*function)();
+					if (function != NULL)
+					{
+						EnterCriticalSection(&csFile);
+						GetSystemTime(&time);
+						fprintf(file, "Thread %d start executing task: %d %d\n", (int)pool[index], time.wMinute,time.wSecond);
+						LeaveCriticalSection(&csFile);
+						flag = (*function)();
+						EnterCriticalSection(&csFile);
+						GetSystemTime(&time);
+						fprintf(file, "Thread %d end executing task: %d %d\n", (int)pool[index], time.wMinute, time.wSecond);
+						LeaveCriticalSection(&csFile);
+					}
 					if (flag)
 					{
 						threadparam[index].access = true;
 					}
+					threadparam[index].function = NULL;
 				}
 			}
 			EnterCriticalSection(&csFile);
-			fprintf(file, "Terminated one thread.\n");
+			fprintf(file, "Terminated thread %d.\n", (int)pool[index]);
 			LeaveCriticalSection(&csFile);
 		return 0;
 	}
@@ -232,7 +230,7 @@ bool f1()
 {
 	try
 	{
-		for (int i = 0; i < 10000000; i++);
+		Sleep(1000);
 		puts("aaa");
 	}
 	catch (...)
@@ -248,7 +246,7 @@ bool f2()
 {
 	try
 	{
-		for (int i = 0; i < 100000000; i++);
+		Sleep(2000);
 		puts("bbb");
 	}
 	catch (...)
@@ -264,7 +262,7 @@ bool f3()
 {
 	try
 	{
-		for (int i = 0; i < 1000000000; i++);
+		Sleep(3000);
 		puts("ccc");
 	}
 	catch (...)
